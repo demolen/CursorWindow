@@ -4,7 +4,7 @@ A tiny background Windows (Win32) tray app that automatically moves the active w
 
 - Runs in the background with a tray icon
 - Auto action: when the foreground window changes, it is moved to the cursor monitor
-- Tray menu: toggle auto-move, move-now, exit
+- Tray menu: toggle auto-move, taskbar selection, start with Windows, exit
 
 ## Build
 
@@ -22,7 +22,7 @@ You can build with either Microsoft Visual C++ (MSVC) or MinGW (g++).
 
 ```
 rc /nologo /fo app.res app.rc
-cl /EHsc /W4 /O2 open_in_cursor_display.cpp app.res user32.lib shell32.lib gdi32.lib
+cl /EHsc /W4 /O2 open_in_cursor_display.cpp app.res user32.lib shell32.lib gdi32.lib advapi32.lib
 ```
 
 This produces `open_in_cursor_display.exe` in the same directory.
@@ -35,7 +35,7 @@ This produces `open_in_cursor_display.exe` in the same directory.
 ```
 windres -i app.rc -o app.res
 
-g++ -municode -O2 -std=c++17 -Wall -Wextra -o OpenInCursorDisplay.exe open_in_cursor_display.cpp app.res -luser32 -lshell32 -lgdi32
+g++ -municode -O2 -std=c++17 -Wall -Wextra -o OpenInCursorDisplay.exe open_in_cursor_display.cpp app.res -luser32 -lshell32 -lgdi32 -ladvapi32
 ```
 
 If your MinGW environment doesn’t have `windres` on PATH, try `x86_64-w64-mingw32-windres` instead of `windres`.

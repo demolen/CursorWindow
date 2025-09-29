@@ -1,9 +1,9 @@
 // OpenInCursorDisplay - moves the active window to the monitor under the mouse cursor
 // Runs as a background tray app
 // Build (MSVC):
-//   cl /EHsc /W4 /O2 /DUNICODE /D_UNICODE open_in_cursor_display.cpp user32.lib shell32.lib gdi32.lib
+//   cl /EHsc /W4 /O2 /DUNICODE /D_UNICODE open_in_cursor_display.cpp user32.lib shell32.lib gdi32.lib advapi32.lib
 // Build (MinGW):
-//   g++ -municode -O2 -std=c++17 -Wall -Wextra -o OpenInCursorDisplay.exe open_in_cursor_display.cpp -luser32 -lshell32 -lgdi32
+//   g++ -municode -O2 -std=c++17 -Wall -Wextra -o OpenInCursorDisplay.exe open_in_cursor_display.cpp -luser32 -lshell32 -lgdi32 -ladvapi32
 
 #ifndef UNICODE
 #define UNICODE
@@ -25,6 +25,7 @@ static const UINT WMAPP_NOTIFYICON = WM_APP + 1;
 static const UINT kTrayIconId = 1;
 
 static const UINT IDM_TOGGLE = 1001;
+static const UINT IDM_STARTUP_TOGGLE = 1002;
 static const UINT IDM_TASKBAR_TOGGLE = 1003;
 static const UINT IDM_EXIT = 1004;
 
@@ -33,6 +34,7 @@ HWINEVENTHOOK g_hWinEventHook = nullptr;
 HWINEVENTHOOK g_hTaskbarHook = nullptr;
 BOOL g_enabled = TRUE;
 BOOL g_taskbarEnabled = TRUE;
+BOOL g_startupEnabled = TRUE;
 UINT g_uTaskbarRestart = 0;
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -45,6 +47,9 @@ void EnsureHook();
 void RemoveHook();
 void EnsureTaskbarHook();
 void RemoveTaskbarHook();
+void LoadOrInitStartupPreference();
+void SaveStartupPreference();
+void ApplyStartupRunEntry(BOOL enabled);
 void MoveWindowToCursorDisplay(HWND hwnd);
 void MoveWindowToCursorDisplaySmart(HWND hwnd);
 BOOL IsInterestingWindow(HWND hwnd);
@@ -105,6 +110,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         AddTrayIcon(hwnd);
         EnsureHook();
         EnsureTaskbarHook();
+        LoadOrInitStartupPreference();
+        UpdateTrayTooltip(hwnd);
         return 0;
 
     case WMAPP_NOTIFYICON:
@@ -136,6 +143,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         case IDM_TASKBAR_TOGGLE:
             g_taskbarEnabled = !g_taskbarEnabled;
             if (g_taskbarEnabled) EnsureTaskbarHook(); else RemoveTaskbarHook();
+            break;
+        case IDM_STARTUP_TOGGLE:
+            g_startupEnabled = !g_startupEnabled;
+            SaveStartupPreference();
+            ApplyStartupRunEntry(g_startupEnabled);
+            UpdateTrayTooltip(hwnd);
             break;
         case IDM_EXIT:
             DestroyWindow(hwnd);
@@ -174,9 +187,10 @@ void AddTrayIcon(HWND hwnd)
     if (!nid.hIcon) nid.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
 
     wchar_t tip[128];
-    wsprintfW(tip, L"%s (%s%s)", kAppDisplayName, 
+    wsprintfW(tip, L"%s (%s%s%s)", kAppDisplayName, 
               g_enabled ? L"Auto" : L"Paused",
-              g_taskbarEnabled ? L", Taskbar" : L"");
+              g_taskbarEnabled ? L", Taskbar" : L"",
+              g_startupEnabled ? L", Startup" : L"");
     lstrcpynW(nid.szTip, tip, ARRAYSIZE(nid.szTip));
 
     Shell_NotifyIconW(NIM_ADD, &nid);
@@ -204,9 +218,10 @@ void UpdateTrayTooltip(HWND hwnd)
     nid.uFlags = NIF_TIP;
 
     wchar_t tip[128];
-    wsprintfW(tip, L"%s (%s%s)", kAppDisplayName, 
+    wsprintfW(tip, L"%s (%s%s%s)", kAppDisplayName, 
               g_enabled ? L"Auto" : L"Paused",
-              g_taskbarEnabled ? L", Taskbar" : L"");
+              g_taskbarEnabled ? L", Taskbar" : L"",
+              g_startupEnabled ? L", Startup" : L"");
     lstrcpynW(nid.szTip, tip, ARRAYSIZE(nid.szTip));
 
     Shell_NotifyIconW(NIM_MODIFY, &nid);
@@ -222,8 +237,10 @@ void ShowContextMenu(HWND hwnd)
 
     UINT toggleFlags = MF_STRING | (g_enabled ? MF_CHECKED : 0);
     UINT taskbarFlags = MF_STRING | (g_taskbarEnabled ? MF_CHECKED : 0);
+    UINT startupFlags = MF_STRING | (g_startupEnabled ? MF_CHECKED : 0);
     AppendMenuW(hMenu, toggleFlags, IDM_TOGGLE, L"Auto move active window to mouse display");
     AppendMenuW(hMenu, taskbarFlags, IDM_TASKBAR_TOGGLE, L"Taskbar selection moves to mouse display");
+    AppendMenuW(hMenu, startupFlags, IDM_STARTUP_TOGGLE, L"Start with Windows");
     AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(hMenu, MF_STRING, IDM_EXIT, L"Exit");
 
@@ -269,6 +286,57 @@ void RemoveTaskbarHook()
     if (g_hTaskbarHook) {
         UnhookWinEvent(g_hTaskbarHook);
         g_hTaskbarHook = nullptr;
+    }
+}
+
+void ApplyStartupRunEntry(BOOL enabled)
+{
+    HKEY hKey;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, nullptr, 0,
+                        KEY_SET_VALUE | KEY_QUERY_VALUE, nullptr, &hKey, nullptr) == ERROR_SUCCESS) {
+        if (enabled) {
+            wchar_t path[MAX_PATH]{};
+            if (GetModuleFileNameW(nullptr, path, ARRAYSIZE(path)) > 0) {
+                wchar_t value[1024];
+                wsprintfW(value, L"\"%s\"", path);
+                RegSetValueExW(hKey, kAppDisplayName, 0, REG_SZ, reinterpret_cast<const BYTE*>(value),
+                               (lstrlenW(value) + 1) * sizeof(wchar_t));
+            }
+        } else {
+            RegDeleteValueW(hKey, kAppDisplayName);
+        }
+        RegCloseKey(hKey);
+    }
+}
+
+void LoadOrInitStartupPreference()
+{
+    HKEY hKey;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\OpenInCursorDisplay", 0, nullptr, 0,
+                        KEY_READ | KEY_WRITE, nullptr, &hKey, nullptr) == ERROR_SUCCESS) {
+        DWORD val = 0, type = 0, size = sizeof(val);
+        if (RegQueryValueExW(hKey, L"StartupEnabled", nullptr, &type, reinterpret_cast<BYTE*>(&val), &size) == ERROR_SUCCESS && type == REG_DWORD) {
+            g_startupEnabled = (val != 0);
+        } else {
+            g_startupEnabled = TRUE; // default ON first run
+            val = 1;
+            RegSetValueExW(hKey, L"StartupEnabled", 0, REG_DWORD, reinterpret_cast<const BYTE*>(&val), sizeof(val));
+        }
+        RegCloseKey(hKey);
+    } else {
+        g_startupEnabled = TRUE;
+    }
+    ApplyStartupRunEntry(g_startupEnabled);
+}
+
+void SaveStartupPreference()
+{
+    HKEY hKey;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\OpenInCursorDisplay", 0, nullptr, 0,
+                        KEY_READ | KEY_WRITE, nullptr, &hKey, nullptr) == ERROR_SUCCESS) {
+        DWORD val = g_startupEnabled ? 1 : 0;
+        RegSetValueExW(hKey, L"StartupEnabled", 0, REG_DWORD, reinterpret_cast<const BYTE*>(&val), sizeof(val));
+        RegCloseKey(hKey);
     }
 }
 
