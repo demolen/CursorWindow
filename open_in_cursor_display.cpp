@@ -13,6 +13,7 @@
 #endif
 #include <windows.h>
 #include <shellapi.h>
+#include "resource.h"
 
 #ifndef ARRAYSIZE
 #define ARRAYSIZE(A) (sizeof(A) / sizeof((A)[0]))
@@ -25,11 +26,14 @@ static const UINT kTrayIconId = 1;
 
 static const UINT IDM_TOGGLE = 1001;
 static const UINT IDM_MOVE_NOW = 1002;
-static const UINT IDM_EXIT = 1003;
+static const UINT IDM_TASKBAR_TOGGLE = 1003;
+static const UINT IDM_EXIT = 1004;
 
 HINSTANCE g_hInst = nullptr;
 HWINEVENTHOOK g_hWinEventHook = nullptr;
+HWINEVENTHOOK g_hTaskbarHook = nullptr;
 BOOL g_enabled = TRUE;
+BOOL g_taskbarEnabled = TRUE;
 UINT g_uTaskbarRestart = 0;
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -40,7 +44,10 @@ void UpdateTrayTooltip(HWND hwnd);
 void ShowContextMenu(HWND hwnd);
 void EnsureHook();
 void RemoveHook();
+void EnsureTaskbarHook();
+void RemoveTaskbarHook();
 void MoveWindowToCursorDisplay(HWND hwnd);
+void MoveWindowToCursorDisplaySmart(HWND hwnd);
 BOOL IsInterestingWindow(HWND hwnd);
 
 int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int)
@@ -60,7 +67,8 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int)
     wc.lpfnWndProc = WndProc;
     wc.hInstance = hInstance;
     wc.lpszClassName = kAppClassName;
-    wc.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+    wc.hIcon = LoadIconW(g_hInst, MAKEINTRESOURCEW(IDI_APPICON));
+    if (!wc.hIcon) wc.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
     wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
 
@@ -97,6 +105,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         g_uTaskbarRestart = RegisterWindowMessageW(L"TaskbarCreated");
         AddTrayIcon(hwnd);
         EnsureHook();
+        EnsureTaskbarHook();
         return 0;
 
     case WMAPP_NOTIFYICON:
@@ -125,8 +134,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             if (g_enabled) EnsureHook(); else RemoveHook();
             UpdateTrayTooltip(hwnd);
             break;
+        case IDM_TASKBAR_TOGGLE:
+            g_taskbarEnabled = !g_taskbarEnabled;
+            if (g_taskbarEnabled) EnsureTaskbarHook(); else RemoveTaskbarHook();
+            break;
         case IDM_MOVE_NOW:
-            MoveWindowToCursorDisplay(GetForegroundWindow());
+            MoveWindowToCursorDisplaySmart(GetForegroundWindow());
             break;
         case IDM_EXIT:
             DestroyWindow(hwnd);
@@ -136,6 +149,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
     case WM_DESTROY:
         RemoveHook();
+        RemoveTaskbarHook();
         RemoveTrayIcon(hwnd);
         PostQuitMessage(0);
         return 0;
@@ -159,12 +173,14 @@ void AddTrayIcon(HWND hwnd)
     nid.uID = kTrayIconId;
     nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
     nid.uCallbackMessage = WMAPP_NOTIFYICON;
-    nid.hIcon = (HICON)LoadImageW(nullptr, IDI_APPLICATION, IMAGE_ICON,
+    nid.hIcon = (HICON)LoadImageW(g_hInst, MAKEINTRESOURCEW(IDI_APPICON), IMAGE_ICON,
                                   GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_SHARED);
     if (!nid.hIcon) nid.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
 
     wchar_t tip[128];
-    wsprintfW(tip, L"%s (%s)", kAppDisplayName, g_enabled ? L"Enabled" : L"Paused");
+    wsprintfW(tip, L"%s (%s%s)", kAppDisplayName, 
+              g_enabled ? L"Auto" : L"Paused",
+              g_taskbarEnabled ? L", Taskbar" : L"");
     lstrcpynW(nid.szTip, tip, ARRAYSIZE(nid.szTip));
 
     Shell_NotifyIconW(NIM_ADD, &nid);
@@ -192,7 +208,9 @@ void UpdateTrayTooltip(HWND hwnd)
     nid.uFlags = NIF_TIP;
 
     wchar_t tip[128];
-    wsprintfW(tip, L"%s (%s)", kAppDisplayName, g_enabled ? L"Enabled" : L"Paused");
+    wsprintfW(tip, L"%s (%s%s)", kAppDisplayName, 
+              g_enabled ? L"Auto" : L"Paused",
+              g_taskbarEnabled ? L", Taskbar" : L"");
     lstrcpynW(nid.szTip, tip, ARRAYSIZE(nid.szTip));
 
     Shell_NotifyIconW(NIM_MODIFY, &nid);
@@ -207,7 +225,9 @@ void ShowContextMenu(HWND hwnd)
     if (!hMenu) return;
 
     UINT toggleFlags = MF_STRING | (g_enabled ? MF_CHECKED : 0);
+    UINT taskbarFlags = MF_STRING | (g_taskbarEnabled ? MF_CHECKED : 0);
     AppendMenuW(hMenu, toggleFlags, IDM_TOGGLE, g_enabled ? L"Auto-move (Enabled)" : L"Auto-move (Paused)");
+    AppendMenuW(hMenu, taskbarFlags, IDM_TASKBAR_TOGGLE, g_taskbarEnabled ? L"Taskbar selection (Enabled)" : L"Taskbar selection (Paused)");
     AppendMenuW(hMenu, MF_STRING, IDM_MOVE_NOW, L"Move foreground window now");
     AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(hMenu, MF_STRING, IDM_EXIT, L"Exit");
@@ -234,6 +254,26 @@ void RemoveHook()
     if (g_hWinEventHook) {
         UnhookWinEvent(g_hWinEventHook);
         g_hWinEventHook = nullptr;
+    }
+}
+
+void EnsureTaskbarHook()
+{
+    if (g_hTaskbarHook) return;
+    g_hTaskbarHook = SetWinEventHook(
+        EVENT_OBJECT_FOCUS,
+        EVENT_OBJECT_FOCUS,
+        nullptr,
+        WinEventProc,
+        0, 0,
+        WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+}
+
+void RemoveTaskbarHook()
+{
+    if (g_hTaskbarHook) {
+        UnhookWinEvent(g_hTaskbarHook);
+        g_hTaskbarHook = nullptr;
     }
 }
 
@@ -316,9 +356,103 @@ void MoveWindowToCursorDisplay(HWND hwnd)
     }
 }
 
-void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG idObject, LONG idChild, DWORD, DWORD)
+void MoveWindowToCursorDisplaySmart(HWND hwnd)
 {
-    if (event != EVENT_SYSTEM_FOREGROUND) return;
-    if (idObject != OBJID_WINDOW) return;
-    MoveWindowToCursorDisplay(hwnd);
+    if (!IsInterestingWindow(hwnd)) return;
+
+    // Identify monitors for the window and the current cursor
+    HMONITOR monWindow = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL);
+    if (!monWindow) return;
+
+    POINT cursor{};
+    GetCursorPos(&cursor);
+    HMONITOR monCursor = MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST);
+    if (monCursor == monWindow) return; // already on the cursor monitor
+
+    WINDOWPLACEMENT wp{}; wp.length = sizeof(wp);
+    if (!GetWindowPlacement(hwnd, &wp)) return;
+
+    if (wp.showCmd == SW_SHOWMINIMIZED) {
+        // Skip minimized windows
+        return;
+    }
+
+    RECT wr{};
+    if (!GetWindowRect(hwnd, &wr)) return;
+
+    MONITORINFO miSrc{}; miSrc.cbSize = sizeof(miSrc);
+    MONITORINFO miDst{}; miDst.cbSize = sizeof(miDst);
+    if (!GetMonitorInfoW(monWindow, &miSrc)) return;
+    if (!GetMonitorInfoW(monCursor, &miDst)) return;
+
+    BOOL wasMaximized = (wp.showCmd == SW_SHOWMAXIMIZED);
+    
+    int newWidth, newHeight;
+    int newLeft, newTop;
+    
+    if (wasMaximized) {
+        // For maximized windows, fit to the destination monitor's work area
+        ShowWindow(hwnd, SW_RESTORE);
+        newWidth = miDst.rcWork.right - miDst.rcWork.left;
+        newHeight = miDst.rcWork.bottom - miDst.rcWork.top;
+        newLeft = miDst.rcWork.left;
+        newTop = miDst.rcWork.top;
+    } else {
+        // For normal windows, preserve size but constrain to destination monitor
+        const int width = wr.right - wr.left;
+        const int height = wr.bottom - wr.top;
+        
+        // Calculate max size that fits in destination monitor
+        const int maxWidth = miDst.rcWork.right - miDst.rcWork.left;
+        const int maxHeight = miDst.rcWork.bottom - miDst.rcWork.top;
+        
+        newWidth = min(width, maxWidth);
+        newHeight = min(height, maxHeight);
+        
+        // Compute offset relative to source work area
+        int dx = wr.left - miSrc.rcWork.left;
+        int dy = wr.top - miSrc.rcWork.top;
+        
+        newLeft = miDst.rcWork.left + dx;
+        newTop = miDst.rcWork.top + dy;
+        
+        // Clamp to destination work area
+        if (newLeft + newWidth > miDst.rcWork.right) newLeft = miDst.rcWork.right - newWidth;
+        if (newTop + newHeight > miDst.rcWork.bottom) newTop = miDst.rcWork.bottom - newHeight;
+        if (newLeft < miDst.rcWork.left) newLeft = miDst.rcWork.left;
+        if (newTop < miDst.rcWork.top) newTop = miDst.rcWork.top;
+    }
+
+    SetWindowPos(hwnd, nullptr, newLeft, newTop, newWidth, newHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+
+    if (wasMaximized) {
+        ShowWindow(hwnd, SW_MAXIMIZE);
+    }
+}
+
+void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd, LONG idObject, LONG idChild, DWORD, DWORD)
+{
+    if (event == EVENT_SYSTEM_FOREGROUND) {
+        if (idObject != OBJID_WINDOW) return;
+        if (hWinEventHook == g_hWinEventHook) {
+            MoveWindowToCursorDisplay(hwnd);
+        }
+    } else if (event == EVENT_OBJECT_FOCUS) {
+        if (hWinEventHook == g_hTaskbarHook && g_taskbarEnabled) {
+            // Check if focus is on a taskbar button
+            wchar_t className[128]{};
+            if (GetClassNameW(hwnd, className, ARRAYSIZE(className))) {
+                if (lstrcmpiW(className, L"MSTaskListWClass") == 0 || 
+                    lstrcmpiW(className, L"TaskListThumbnailWnd") == 0 ||
+                    wcsstr(className, L"TaskBar") != nullptr) {
+                    // Small delay to let the window become foreground
+                    Sleep(50);
+                    HWND foreground = GetForegroundWindow();
+                    if (foreground) {
+                        MoveWindowToCursorDisplaySmart(foreground);
+                    }
+                }
+            }
+        }
+    }
 }

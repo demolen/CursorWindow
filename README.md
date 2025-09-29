@@ -10,25 +10,35 @@ A tiny background Windows (Win32) tray app that automatically moves the active w
 
 You can build with either Microsoft Visual C++ (MSVC) or MinGW (g++).
 
+### Custom icon
+
+- Place your `.ico` file in this folder and name it `app.ico` (or edit `app.rc` to point to your file).
+- The app embeds this icon into the EXE and uses it for the tray.
+
 ### MSVC (Visual Studio Developer Command Prompt)
 
 1) Open a "x64 Native Tools Command Prompt for VS" (or any Developer Command Prompt).
 2) Navigate to this folder and run:
 
 ```
-cl /EHsc /W4 /O2 /DUNICODE /D_UNICODE open_in_cursor_display.cpp user32.lib shell32.lib gdi32.lib
+rc /nologo /fo app.res app.rc
+cl /EHsc /W4 /O2 open_in_cursor_display.cpp app.res user32.lib shell32.lib gdi32.lib
 ```
 
 This produces `open_in_cursor_display.exe` in the same directory.
 
 ### MinGW (MSYS2)
 
-1) Install MSYS2 and the MinGW toolchain (e.g., `pacman -S mingw-w64-ucrt-x86_64-gcc`).
+1) Install MSYS2 and the MinGW toolchain (e.g., `pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-binutils`).
 2) Open the appropriate MinGW shell, then run:
 
 ```
-g++ -municode -O2 -std=c++17 -Wall -Wextra -o OpenInCursorDisplay.exe open_in_cursor_display.cpp -luser32 -lshell32 -lgdi32
+windres -i app.rc -o app.res
+
+g++ -municode -O2 -std=c++17 -Wall -Wextra -o OpenInCursorDisplay.exe open_in_cursor_display.cpp app.res -luser32 -lshell32 -lgdi32
 ```
+
+If your MinGW environment doesn’t have `windres` on PATH, try `x86_64-w64-mingw32-windres` instead of `windres`.
 
 ## Usage
 
