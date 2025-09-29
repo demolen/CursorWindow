@@ -5,8 +5,12 @@
 // Build (MinGW):
 //   g++ -municode -O2 -std=c++17 -Wall -Wextra -o OpenInCursorDisplay.exe open_in_cursor_display.cpp -luser32 -lshell32 -lgdi32
 
+#ifndef UNICODE
 #define UNICODE
+#endif
+#ifndef _UNICODE
 #define _UNICODE
+#endif
 #include <windows.h>
 #include <shellapi.h>
 
@@ -155,7 +159,7 @@ void AddTrayIcon(HWND hwnd)
     nid.uID = kTrayIconId;
     nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
     nid.uCallbackMessage = WMAPP_NOTIFYICON;
-    nid.hIcon = (HICON)LoadImageW(nullptr, MAKEINTRESOURCEW(OIC_WINLOGO), IMAGE_ICON,
+    nid.hIcon = (HICON)LoadImageW(nullptr, IDI_APPLICATION, IMAGE_ICON,
                                   GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_SHARED);
     if (!nid.hIcon) nid.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
 
