@@ -25,7 +25,6 @@ static const UINT WMAPP_NOTIFYICON = WM_APP + 1;
 static const UINT kTrayIconId = 1;
 
 static const UINT IDM_TOGGLE = 1001;
-static const UINT IDM_MOVE_NOW = 1002;
 static const UINT IDM_TASKBAR_TOGGLE = 1003;
 static const UINT IDM_EXIT = 1004;
 
@@ -138,9 +137,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             g_taskbarEnabled = !g_taskbarEnabled;
             if (g_taskbarEnabled) EnsureTaskbarHook(); else RemoveTaskbarHook();
             break;
-        case IDM_MOVE_NOW:
-            MoveWindowToCursorDisplaySmart(GetForegroundWindow());
-            break;
         case IDM_EXIT:
             DestroyWindow(hwnd);
             break;
@@ -226,9 +222,8 @@ void ShowContextMenu(HWND hwnd)
 
     UINT toggleFlags = MF_STRING | (g_enabled ? MF_CHECKED : 0);
     UINT taskbarFlags = MF_STRING | (g_taskbarEnabled ? MF_CHECKED : 0);
-    AppendMenuW(hMenu, toggleFlags, IDM_TOGGLE, g_enabled ? L"Auto-move (Enabled)" : L"Auto-move (Paused)");
-    AppendMenuW(hMenu, taskbarFlags, IDM_TASKBAR_TOGGLE, g_taskbarEnabled ? L"Taskbar selection (Enabled)" : L"Taskbar selection (Paused)");
-    AppendMenuW(hMenu, MF_STRING, IDM_MOVE_NOW, L"Move foreground window now");
+    AppendMenuW(hMenu, toggleFlags, IDM_TOGGLE, L"Auto move active window to mouse display");
+    AppendMenuW(hMenu, taskbarFlags, IDM_TASKBAR_TOGGLE, L"Taskbar selection moves to mouse display");
     AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(hMenu, MF_STRING, IDM_EXIT, L"Exit");
 
