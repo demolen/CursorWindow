@@ -18,6 +18,8 @@
     <Property Id="ARPPRODUCTICON" Value="AppIcon" />
     <Property Id="ARPHELPLINK" Value="https://nanane.de" />
     <Property Id="ARPURLINFOABOUT" Value="https://nanane.de" />
+    <!-- Required by WixUI_InstallDir -->
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
 
     <Feature Id="MainFeature" Title="OpenInCursorDisplay" Level="1">
       <ComponentRef Id="cmpMainExe" />
