@@ -1,6 +1,6 @@
 param(
   [string]$Version = "1.0.0.0",
-  [string]$Publisher = "CN=Nanane",
+  [string]$Publisher = "CN=89D75148-AE6F-4537-B23A-D2534BABD00B",
   [string]$OutDir = "dist",
   [switch]$SkipSign,
   [switch]$Force
@@ -18,12 +18,12 @@ Copy-Item -Force (Join-Path $proj 'ChaseTheCursor.exe') $staging
 Copy-Item -Force (Join-Path $root 'AppxManifest.xml') $staging
 Copy-Item -Recurse -Force (Join-Path $root 'assets') $staging
 
-# Update version and publisher in manifest (simple text replace)
+# Update version and publisher in manifest (robust XML edit)
 $manifestPath = Join-Path $staging 'AppxManifest.xml'
-$xml = Get-Content -Raw $manifestPath
-$xml = $xml.Replace('Version="1.0.0.0"', ('Version="{0}"' -f $Version))
-$xml = $xml.Replace('Publisher="CN=Nanane"', ('Publisher="{0}"' -f $Publisher))
-Set-Content -Encoding UTF8 -Path $manifestPath -Value $xml
+[xml]$xml = Get-Content -Raw $manifestPath
+$xml.Package.Identity.Version = $Version
+$xml.Package.Identity.Publisher = $Publisher
+$xml.Save($manifestPath)
 
 # Find MakeAppx and SignTool (optional)
 $kits = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
