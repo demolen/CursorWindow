@@ -19,8 +19,8 @@
 #define ARRAYSIZE(A) (sizeof(A) / sizeof((A)[0]))
 #endif
 
-static const wchar_t kAppClassName[] = L"OpenInCursorDisplayWindow";
-static const wchar_t kAppDisplayName[] = L"OpenInCursorDisplay";
+static const wchar_t kAppClassName[] = L"ChaseTheCursorWindow";
+static const wchar_t kAppDisplayName[] = L"ChaseTheCursor";
 static const UINT WMAPP_NOTIFYICON = WM_APP + 1;
 static const UINT kTrayIconId = 1;
 
@@ -312,7 +312,7 @@ void ApplyStartupRunEntry(BOOL enabled)
 void LoadOrInitStartupPreference()
 {
     HKEY hKey;
-    if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\OpenInCursorDisplay", 0, nullptr, 0,
+if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\ChaseTheCursor", 0, nullptr, 0,
                         KEY_READ | KEY_WRITE, nullptr, &hKey, nullptr) == ERROR_SUCCESS) {
         DWORD val = 0, type = 0, size = sizeof(val);
         if (RegQueryValueExW(hKey, L"StartupEnabled", nullptr, &type, reinterpret_cast<BYTE*>(&val), &size) == ERROR_SUCCESS && type == REG_DWORD) {
@@ -332,7 +332,7 @@ void LoadOrInitStartupPreference()
 void SaveStartupPreference()
 {
     HKEY hKey;
-    if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\OpenInCursorDisplay", 0, nullptr, 0,
+if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\ChaseTheCursor", 0, nullptr, 0,
                         KEY_READ | KEY_WRITE, nullptr, &hKey, nullptr) == ERROR_SUCCESS) {
         DWORD val = g_startupEnabled ? 1 : 0;
         RegSetValueExW(hKey, L"StartupEnabled", 0, REG_DWORD, reinterpret_cast<const BYTE*>(&val), sizeof(val));
