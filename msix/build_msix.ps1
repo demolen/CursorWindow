@@ -1,7 +1,9 @@
 param(
   [string]$Version = "1.0.0.0",
   [string]$Publisher = "CN=Nanane",
-  [string]$OutDir = "dist"
+  [string]$OutDir = "dist",
+  [switch]$SkipSign,
+  [switch]$Force
 )
 
 $ErrorActionPreference = 'Stop'
@@ -31,21 +33,30 @@ $signtool = Get-ChildItem -Path $kits -Recurse -Filter signtool.exe -ErrorAction
 New-Item -ItemType Directory -Force -Path (Join-Path $root $OutDir) | Out-Null
 $outMsix = Join-Path (Join-Path $root $OutDir) 'ChaseTheCursor.msix'
 
+if (Test-Path $outMsix) {
+  if ($Force) { Remove-Item -Force $outMsix }
+}
+
 if (-not $makeAppx) {
   Write-Warning 'MakeAppx.exe not found. Install Windows 10/11 SDK to build the MSIX.'
   return
 }
 
-& $makeAppx pack /d $staging /p $outMsix | Write-Host
+# Always overwrite existing output (/o)
+& $makeAppx pack /d $staging /p $outMsix /o | Write-Host
 
 # Optional signing for local sideload testing
-if ($signtool) {
-  $certName = "CN=Nanane.Dev"
-  $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -eq "CN=Nanane.Dev" } | Select-Object -First 1
-  if (-not $cert) {
-    $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject $certName -CertStoreLocation Cert:\CurrentUser\My
+if (-not $SkipSign -and $signtool) {
+  try {
+    $certName = "CN=Nanane.Dev"
+    $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -eq $certName } | Select-Object -First 1
+    if (-not $cert) {
+      $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject $certName -CertStoreLocation Cert:\CurrentUser\My
+    }
+    & $signtool sign /fd SHA256 /a /n "Nanane.Dev" $outMsix | Write-Host
+  } catch {
+    Write-Warning "Signing failed (ok for Store submission). $_"
   }
-  & $signtool sign /fd SHA256 /a /n "Nanane.Dev" $outMsix | Write-Host
 }
 
 Write-Host "MSIX built at: $outMsix"

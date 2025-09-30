@@ -10,7 +10,7 @@
   <Properties>
     <DisplayName>ChaseTheCursor</DisplayName>
     <PublisherDisplayName>Nanane</PublisherDisplayName>
-    <Logo>assets\logo.png</Logo>
+    <Logo>assets\StoreLogo.png</Logo>
   </Properties>
   <Resources>
     <Resource Language="en-us" />
@@ -25,8 +25,8 @@
       <uap:VisualElements DisplayName="ChaseTheCursor"
                           Description="Move active windows to the monitor under your mouse"
                           BackgroundColor="#000000"
-                          Square44x44Logo="assets\logo.png"
-                          Square150x150Logo="assets\logo.png"
+                          Square44x44Logo="assets\Square44x44Logo.png"
+                          Square150x150Logo="assets\Square150x150Logo.png"
                           AppListEntry="none" />
     </Application>
   </Applications>
