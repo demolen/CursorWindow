@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
   <Product Id="*"
            Name="ChaseTheCursor"
            Language="1033"
@@ -64,7 +65,27 @@
       </Component>
     </DirectoryRef>
 
-    <!-- Minimal UI -->
-    <UIRef Id="WixUI_Minimal" />
+    <!-- UI with license and install directory, and an optional 'Launch' checkbox on Exit -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch ChaseTheCursor" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <WixVariable Id="WixUILicenseRtf" Value="..\LICENSE.rtf" />
+    <UI>
+      <UIRef Id="WixUI_InstallDir" />
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchApplication">WIXUI_EXITDIALOGOPTIONALCHECKBOX=1 AND NOT Installed</Publish>
+    </UI>
+
+    <!-- Launch after install -->
+    <CustomAction Id="LaunchApplication" FileKey="filExe" ExeCommand="" Return="asyncNoWait" Impersonate="yes" />
+
+    <!-- Force close the running app during install/upgrade/uninstall using ComSpec -->
+    <CustomAction Id="KillChaseTheCursorOnInstall" Directory="INSTALLDIR" ExeCommand='[ComSpec] /c taskkill /IM "ChaseTheCursor.exe" /T /F' Execute="immediate" Return="ignore" Impersonate="yes" />
+    <CustomAction Id="KillChaseTheCursorOnUninstall" Directory="INSTALLDIR" ExeCommand='[ComSpec] /c taskkill /IM "ChaseTheCursor.exe" /T /F' Execute="immediate" Return="ignore" Impersonate="yes" />
+
+    <InstallExecuteSequence>
+      <!-- Close before uninstall file removal -->
+      <Custom Action="KillChaseTheCursorOnUninstall" Before="RemoveFiles">REMOVE~="ALL"</Custom>
+      <!-- Close before fresh install copies -->
+      <Custom Action="KillChaseTheCursorOnInstall" Before="InstallValidate">NOT Installed</Custom>
+    </InstallExecuteSequence>
   </Product>
 </Wix>

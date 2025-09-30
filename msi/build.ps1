@@ -40,6 +40,6 @@ if (-not (Test-Path $light))  { Write-Error "light.exe not found in $wixBin" }
 New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
 
 $wixobj = [System.IO.Path]::ChangeExtension($Wxs, '.wixobj')
-& $candle -nologo -arch $Arch $Wxs
-& $light -nologo -ext WixUIExtension $wixobj -o (Join-Path $OutDir "OpenInCursorDisplay-$Arch.msi")
+& $candle -nologo -ext WixUIExtension -ext WixUtilExtension -arch $Arch $Wxs
+& $light -nologo -ext WixUIExtension -ext WixUtilExtension $wixobj -o (Join-Path $OutDir "ChaseTheCursor-$Arch.msi")
 Write-Host "MSI built at: " (Resolve-Path (Join-Path $OutDir "OpenInCursorDisplay-$Arch.msi"))

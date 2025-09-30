@@ -24,6 +24,7 @@ ArchitecturesInstallIn64BitMode=x64
 PrivilegesRequired=admin
 SetupIconFile=..\\app.ico
 UninstallDisplayIcon={app}\\ChaseTheCursor.exe
+LicenseFile=..\\LICENSE.txt
 
 [Files]
 ; Install the executable. Normalize the installed name to keep registry entry stable.
