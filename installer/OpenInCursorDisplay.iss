@@ -5,6 +5,7 @@
 [Setup]
 AppId={{A8D6E0A9-2B63-4C9A-9C13-9D410E91B8BE}}
 AppName=ChaseTheCursor
+AppVerName=ChaseTheCursor
 AppVersion=1.0.0
 AppPublisher=OpenInCursorDisplay
 AppPublisherURL=https://example.invalid
@@ -12,6 +13,8 @@ DefaultDirName={autopf}\ChaseTheCursor
 DisableDirPage=no
 DisableProgramGroupPage=yes
 UsePreviousAppDir=no
+CloseApplications=yes
+RestartApplications=no
 OutputDir=dist
 OutputBaseFilename=ChaseTheCursor-Setup
 Compression=lzma2/max
@@ -35,9 +38,31 @@ Root: HKCU; Subkey: "Software\\Microsoft\\Windows\\CurrentVersion\\Run"; ValueTy
 ; Remove app settings key on uninstall (created by the app for prefs)
 Root: HKCU; Subkey: "Software\\ChaseTheCursor"; Flags: uninsdeletekey
 
+[Code]
+function InitializeSetup(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  { Try to stop a running instance before install/upgrade }
+  Exec(ExpandConstant('{cmd}'), '/c taskkill /IM "ChaseTheCursor.exe" /T /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Result := True;
+end;
+
+function InitializeUninstall(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  { Stop running instance to allow file removal }
+  Exec(ExpandConstant('{cmd}'), '/c taskkill /IM "ChaseTheCursor.exe" /T /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Result := True;
+end;
+
 [Icons]
 Name: "{autoprograms}\\ChaseTheCursor"; Filename: "{app}\\ChaseTheCursor.exe"; WorkingDir: "{app}"
 
 [Run]
 ; Offer to launch after installation
 Filename: "{app}\\ChaseTheCursor.exe"; Description: "Launch ChaseTheCursor"; Flags: nowait postinstall skipifsilent
+
+[UninstallDelete]
+Type: filesandordirs; Name: "{app}"
