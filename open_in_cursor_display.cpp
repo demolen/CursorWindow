@@ -13,6 +13,7 @@
 #endif
 #include <windows.h>
 #include <shellapi.h>
+#include <appmodel.h>
 #include "resource.h"
 
 #ifndef ARRAYSIZE
@@ -35,6 +36,7 @@ HWINEVENTHOOK g_hTaskbarHook = nullptr;
 BOOL g_enabled = TRUE;
 BOOL g_taskbarEnabled = TRUE;
 BOOL g_startupEnabled = TRUE;
+BOOL g_isPackaged = FALSE;
 UINT g_uTaskbarRestart = 0;
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -53,6 +55,7 @@ void ApplyStartupRunEntry(BOOL enabled);
 void MoveWindowToCursorDisplay(HWND hwnd);
 void MoveWindowToCursorDisplaySmart(HWND hwnd);
 BOOL IsInterestingWindow(HWND hwnd);
+BOOL DetectPackaged();
 
 int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int)
 {
@@ -91,6 +94,9 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int)
         return 1;
     }
 
+    // Determine if running as packaged (MSIX)
+    g_isPackaged = DetectPackaged();
+
     // Keep hidden
     ShowWindow(hwnd, SW_HIDE);
 
@@ -111,6 +117,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         EnsureHook();
         EnsureTaskbarHook();
         LoadOrInitStartupPreference();
+        if (!g_isPackaged) {
+            ApplyStartupRunEntry(g_startupEnabled);
+        }
         UpdateTrayTooltip(hwnd);
         return 0;
 
@@ -145,6 +154,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             if (g_taskbarEnabled) EnsureTaskbarHook(); else RemoveTaskbarHook();
             break;
         case IDM_STARTUP_TOGGLE:
+            if (g_isPackaged) {
+                MessageBoxW(hwnd, L"Manage startup in Windows Settings → Apps → Startup for packaged apps.", kAppDisplayName, MB_OK | MB_ICONINFORMATION);
+                break;
+            }
             g_startupEnabled = !g_startupEnabled;
             SaveStartupPreference();
             ApplyStartupRunEntry(g_startupEnabled);
@@ -190,7 +203,7 @@ void AddTrayIcon(HWND hwnd)
     wsprintfW(tip, L"%s (%s%s%s)", kAppDisplayName, 
               g_enabled ? L"Auto" : L"Paused",
               g_taskbarEnabled ? L", Taskbar" : L"",
-              g_startupEnabled ? L", Startup" : L"");
+              (!g_isPackaged && g_startupEnabled) ? L", Startup" : L"");
     lstrcpynW(nid.szTip, tip, ARRAYSIZE(nid.szTip));
 
     Shell_NotifyIconW(NIM_ADD, &nid);
@@ -221,7 +234,7 @@ void UpdateTrayTooltip(HWND hwnd)
     wsprintfW(tip, L"%s (%s%s%s)", kAppDisplayName, 
               g_enabled ? L"Auto" : L"Paused",
               g_taskbarEnabled ? L", Taskbar" : L"",
-              g_startupEnabled ? L", Startup" : L"");
+              (!g_isPackaged && g_startupEnabled) ? L", Startup" : L"");
     lstrcpynW(nid.szTip, tip, ARRAYSIZE(nid.szTip));
 
     Shell_NotifyIconW(NIM_MODIFY, &nid);
@@ -237,10 +250,12 @@ void ShowContextMenu(HWND hwnd)
 
     UINT toggleFlags = MF_STRING | (g_enabled ? MF_CHECKED : 0);
     UINT taskbarFlags = MF_STRING | (g_taskbarEnabled ? MF_CHECKED : 0);
-    UINT startupFlags = MF_STRING | (g_startupEnabled ? MF_CHECKED : 0);
     AppendMenuW(hMenu, toggleFlags, IDM_TOGGLE, L"Auto move active window to mouse display");
     AppendMenuW(hMenu, taskbarFlags, IDM_TASKBAR_TOGGLE, L"Taskbar selection moves to mouse display");
-    AppendMenuW(hMenu, startupFlags, IDM_STARTUP_TOGGLE, L"Start with Windows");
+    if (!g_isPackaged) {
+        UINT startupFlags = MF_STRING | (g_startupEnabled ? MF_CHECKED : 0);
+        AppendMenuW(hMenu, startupFlags, IDM_STARTUP_TOGGLE, L"Start with Windows");
+    }
     AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(hMenu, MF_STRING, IDM_EXIT, L"Exit");
 
@@ -332,12 +347,21 @@ if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\ChaseTheCursor", 0, nullptr, 
 void SaveStartupPreference()
 {
     HKEY hKey;
-if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\ChaseTheCursor", 0, nullptr, 0,
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\ChaseTheCursor", 0, nullptr, 0,
                         KEY_READ | KEY_WRITE, nullptr, &hKey, nullptr) == ERROR_SUCCESS) {
         DWORD val = g_startupEnabled ? 1 : 0;
         RegSetValueExW(hKey, L"StartupEnabled", 0, REG_DWORD, reinterpret_cast<const BYTE*>(&val), sizeof(val));
         RegCloseKey(hKey);
     }
+}
+
+BOOL DetectPackaged()
+{
+    UINT32 len = 0;
+    LONG rc = GetCurrentPackageFullName(&len, nullptr);
+    if (rc == APPMODEL_ERROR_NO_PACKAGE) return FALSE;
+    if (rc == ERROR_INSUFFICIENT_BUFFER && len > 0) return TRUE;
+    return FALSE;
 }
 
 BOOL IsInterestingWindow(HWND hwnd)
