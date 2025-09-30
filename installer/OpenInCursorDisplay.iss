@@ -23,7 +23,7 @@ UninstallDisplayIcon={app}\\ChaseTheCursor.exe
 
 [Files]
 ; Install the executable. Normalize the installed name to keep registry entry stable.
-Source: "..\\open_in_cursor_display.exe"; DestDir: "{app}"; DestName: "ChaseTheCursor.exe"; Flags: ignoreversion
+Source: "..\\ChaseTheCursor.exe"; DestDir: "{app}"; DestName: "ChaseTheCursor.exe"; Flags: ignoreversion
 
 [Tasks]
 Name: "startup"; Description: "Start with Windows (current user)"; Flags: checkedonce
