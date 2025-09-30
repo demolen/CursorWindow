@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product Id="*"
-           Name="OpenInCursorDisplay"
+           Name="ChaseTheCursor"
            Language="1033"
            Version="1.0.0"
-           Manufacturer="OpenInCursorDisplay"
+           Manufacturer="Nanane"
            UpgradeCode="E8C8DCC2-3B8F-4F32-9C3B-2F0E9B8D5DE4">
 
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
@@ -13,8 +13,10 @@
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
 
     <!-- Icon for Add/Remove Programs -->
-    <Icon Id="AppIcon" SourceFile="..\app.ico" />
+    <Icon Id="AppIcon" SourceFile="..\\app.ico" />
     <Property Id="ARPPRODUCTICON" Value="AppIcon" />
+    <Property Id="ARPHELPLINK" Value="https://nanane.de" />
+    <Property Id="ARPURLINFOABOUT" Value="https://nanane.de" />
 
     <Feature Id="MainFeature" Title="OpenInCursorDisplay" Level="1">
       <ComponentRef Id="cmpMainExe" />
@@ -24,29 +26,29 @@
 
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFiles64Folder">
-        <Directory Id="INSTALLDIR" Name="OpenInCursorDisplay">
+        <Directory Id="INSTALLDIR" Name="ChaseTheCursor">
           <Component Id="cmpMainExe" Guid="*">
-            <File Id="filExe" Source="..\open_in_cursor_display.exe" KeyPath="yes" Checksum="yes" />
+            <File Id="filExe" Source="..\\ChaseTheCursor.exe" KeyPath="yes" Checksum="yes" />
           </Component>
         </Directory>
       </Directory>
 
       <Directory Id="ProgramMenuFolder">
-        <Directory Id="AppProgramMenuDir" Name="OpenInCursorDisplay" />
+        <Directory Id="AppProgramMenuDir" Name="ChaseTheCursor" />
       </Directory>
     </Directory>
 
     <DirectoryRef Id="AppProgramMenuDir">
       <Component Id="cmpStartMenuShortcut" Guid="*">
         <Shortcut Id="StartMenuShortcut"
-                  Name="OpenInCursorDisplay"
-                  Description="OpenInCursorDisplay"
-                  Target="[INSTALLDIR]open_in_cursor_display.exe"
+                  Name="ChaseTheCursor"
+                  Description="ChaseTheCursor"
+                  Target="[INSTALLDIR]ChaseTheCursor.exe"
                   WorkingDirectory="INSTALLDIR"
                   Icon="AppIcon" />
         <RemoveFolder Id="RemoveShortcutDir" Directory="AppProgramMenuDir" On="uninstall" />
         <!-- Dummy registry key path to anchor the shortcut component -->
-        <RegistryValue Root="HKCU" Key="Software\OpenInCursorDisplay" Name="Installed" Type="integer" Value="1" KeyPath="yes" />
+        <RegistryValue Root="HKCU" Key="Software\ChaseTheCursor" Name="Installed" Type="integer" Value="1" KeyPath="yes" />
       </Component>
     </DirectoryRef>
 
@@ -55,9 +57,9 @@
       <Component Id="cmpStartupRun" Guid="*">
         <RegistryValue Root="HKCU"
                        Key="Software\Microsoft\Windows\CurrentVersion\Run"
-                       Name="OpenInCursorDisplay"
+                       Name="ChaseTheCursor"
                        Type="string"
-                       Value="&quot;[INSTALLDIR]open_in_cursor_display.exe&quot;"
+                       Value="&quot;[INSTALLDIR]ChaseTheCursor.exe&quot;"
                        KeyPath="yes" />
       </Component>
     </DirectoryRef>
